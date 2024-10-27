@@ -7,7 +7,6 @@ class InputNorm(torch.nn.Module):
         self,
         num_features: int,
         affine: bool = True,
-        missing_imputation: bool = True,
         lambda_range: tuple[float, float] = (-5.0, 5.0),
         device=None,
         dtype=None,
@@ -15,11 +14,6 @@ class InputNorm(torch.nn.Module):
         super().__init__()
         factory_kwargs = {"device": device, "dtype": dtype}
         self.num_features = num_features
-        self.missing_imputation = missing_imputation
-        if self.missing_imputation:
-            self.missing = torch.nn.Parameter(torch.zeros(num_features, **factory_kwargs))
-        else:
-            self.register_parameter("missing", None)
         assert len(lambda_range) == 2, "Lambda range must be a tuple of size 2"
         self.lambda_range = lambda_range
         self.lambdas = torch.nn.Parameter(torch.ones(num_features, **factory_kwargs))
@@ -32,9 +26,6 @@ class InputNorm(torch.nn.Module):
             self.register_parameter("bias", None)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if self.missing_imputation:
-            batch = x.shape[0]
-            x = torch.where(torch.isfinite(x), x, torch.tile(self.missing, (batch, 1)))  # missing value imputation
         l = torch.clamp(self.lambdas, *self.lambda_range)
         l = torch.where(x >= 0, l, 2 - l)
         log1p = torch.log1p(torch.abs(x))
