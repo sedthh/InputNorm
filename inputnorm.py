@@ -26,12 +26,13 @@ class InputNorm(torch.nn.Module):
             self.register_parameter("bias", None)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        mask = torch.isfinite(x)
+        x = torch.where(mask, x, 0)
         l = torch.clamp(self.lambdas, *self.lambda_range)
         l = torch.where(x >= 0, l, 2 - l)
         log1p = torch.log1p(torch.abs(x))
         yj = torch.where(l == 0, log1p, (torch.exp(l * log1p) - 1) / l)
-        x = torch.sign(x) * yj
+        x = torch.where(mask, torch.sign(x) * yj, 0)
         if self.affine:
-            x = self.weight * x + self.bias  # "standardize" output
-        return x
-    
+            x = torch.where(mask, self.weight * x + self.bias, 0)  # "standardize" output
+        return torch.where(mask, x, torch.nan)  # reintroduce nans
